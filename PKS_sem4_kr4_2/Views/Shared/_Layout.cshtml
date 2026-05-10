@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Система управления производством</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="navbar-container">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">
+                    🏭 Система управления производством
+                </a>
+                <div class="navbar-links">
+                    <a class="nav-link" asp-controller="Home" asp-action="Index">
+                        📊 Дашборд
+                    </a>
+                    <a class="nav-link" asp-controller="Materials" asp-action="Index">
+                        🧱 Материалы
+                    </a>
+                    <a class="nav-link" asp-controller="Products" asp-action="Index">
+                        📦 Продукты
+                    </a>
+                    <a class="nav-link" asp-controller="WorkOrders" asp-action="Index">
+                        📋 Заказы
+                    </a>
+                    <a class="nav-link" asp-controller="ProductionLines" asp-action="Index">
+                        ⚙️ Линии
+                    </a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            &copy; 2026 - Система управления производством
+        </div>
+    </footer>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

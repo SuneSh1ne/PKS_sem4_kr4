@@ -1,0 +1,116 @@
+﻿@{
+    ViewData["Title"] = "Панель управления производством";
+}
+
+<div class="dashboard">
+    <h1>🏭 Панель управления производством</h1>
+    <p class="subtitle">Обзор текущего состояния производства</p>
+
+    <!-- Карточки статистики -->
+    <div class="stats-grid">
+        <div class="stat-card blue">
+            <div class="stat-icon">📋</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.ActiveOrders</div>
+                <div class="stat-label">Активных заказов</div>
+            </div>
+        </div>
+        <div class="stat-card yellow">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.PendingOrders</div>
+                <div class="stat-label">Ожидают запуска</div>
+            </div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.CompletedOrders</div>
+                <div class="stat-label">Завершено</div>
+            </div>
+        </div>
+        <div class="stat-card purple">
+            <div class="stat-icon">🏗️</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.ActiveLines / @ViewBag.TotalLines</div>
+                <div class="stat-label">Линии активны</div>
+            </div>
+        </div>
+        <div class="stat-card red">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.LowStockMaterials</div>
+                <div class="stat-label">Материалов на исходе</div>
+            </div>
+        </div>
+        <div class="stat-card cyan">
+            <div class="stat-icon">📦</div>
+            <div class="stat-info">
+                <div class="stat-number">@ViewBag.TotalProducts</div>
+                <div class="stat-label">Продуктов в системе</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Быстрые действия -->
+    <div class="quick-actions">
+        <h2>Быстрые действия</h2>
+        <div class="actions-grid">
+            <a href="/Materials" class="action-card">
+                <span class="action-icon">🧱</span>
+                <span class="action-text">Управление материалами</span>
+            </a>
+            <a href="/Products" class="action-card">
+                <span class="action-icon">📦</span>
+                <span class="action-text">Каталог продуктов</span>
+            </a>
+            <a href="/WorkOrders" class="action-card">
+                <span class="action-icon">📋</span>
+                <span class="action-text">Производственные заказы</span>
+            </a>
+            <a href="/ProductionLines" class="action-card">
+                <span class="action-icon">⚙️</span>
+                <span class="action-text">Производственные линии</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Последние заказы -->
+    <div class="recent-orders">
+        <h2>Последние заказы</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Продукт</th>
+                    <th>Количество</th>
+                    <th>Линия</th>
+                    <th>Статус</th>
+                    <th>Прогресс</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in ViewBag.RecentOrders)
+                {
+                    <tr>
+                        <td>#@order.Id</td>
+                        <td>@order.Product?.Name</td>
+                        <td>@order.Quantity шт.</td>
+                        <td>@(order.ProductionLine?.Name ?? "Не назначена")</td>
+                        <td>
+                            <span class="status-badge status-@order.Status.ToLower()">
+                                @order.Status
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: @order.ProgressPercent%"></div>
+                                <span>@order.ProgressPercent%</span>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

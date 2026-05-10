@@ -1,0 +1,207 @@
+@model IEnumerable<PKS_sem4_kr4_2.Models.Material>
+@{
+    ViewData["Title"] = "Управление материалами";
+}
+
+<div class="page-header">
+    <h1>🧱 Управление материалами</h1>
+    <button class="btn btn-primary" onclick="showAddModal()">+ Добавить материал</button>
+</div>
+
+<!-- Сообщения -->
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<!-- Таблица материалов -->
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Количество</th>
+                <th>Ед. измерения</th>
+                <th>Мин. запас</th>
+                <th>Статус</th>
+                <th>Используется в</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var material in Model)
+            {
+                var isLowStock = material.Quantity < material.MinimalStock;
+                <tr class="@(isLowStock ? "low-stock-row" : "")">
+                    <td>@material.Name</td>
+                    <td>
+                        <span class="quantity-value @(isLowStock ? "text-danger fw-bold" : "")">
+                            @material.Quantity
+                        </span>
+                    </td>
+                    <td>@material.UnitOfMeasure</td>
+                    <td>@material.MinimalStock</td>
+                    <td>
+                        @if (isLowStock)
+                        {
+                            <span class="status-badge status-warning">⚠️ Низкий запас</span>
+                        }
+                        else
+                        {
+                            <span class="status-badge status-ok">✅ Достаточно</span>
+                        }
+                    </td>
+                    <td>
+                        @if (material.ProductMaterials != null && material.ProductMaterials.Any())
+                        {
+                            foreach (var pm in material.ProductMaterials)
+                            {
+                                <span class="product-tag">@pm.Product?.Name</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-sm btn-success" onclick="showReplenishModal(@material.Id, '@material.Name', '@material.UnitOfMeasure')">
+                                📥 Пополнить
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="showEditModal(@material.Id, '@material.Name', @material.Quantity, @material.MinimalStock, '@material.UnitOfMeasure')">
+                                ✏️
+                            </button>
+                            <a href="/Materials/Delete/@material.Id" class="btn btn-sm btn-danger" onclick="return confirm('Удалить материал?')">
+                                🗑️
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно добавления -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Добавить материал</h2>
+            <span class="close" onclick="closeModal('addModal')">&times;</span>
+        </div>
+        <form method="post" action="/Materials/Create">
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" name="Name" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Текущее количество</label>
+                <input type="number" name="Quantity" class="form-control" step="0.01" required />
+            </div>
+            <div class="form-group">
+                <label>Единица измерения</label>
+                <select name="UnitOfMeasure" class="form-control" required>
+                    <option value="кг">кг</option>
+                    <option value="шт">шт</option>
+                    <option value="литр">литр</option>
+                    <option value="м">м</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Минимальный запас</label>
+                <input type="number" name="MinimalStock" class="form-control" step="0.01" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Добавить</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно пополнения -->
+<div id="replenishModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Пополнить запас</h2>
+            <span class="close" onclick="closeModal('replenishModal')">&times;</span>
+        </div>
+        <form method="post" action="/Materials/UpdateStock">
+            <input type="hidden" name="id" id="replenishMaterialId" />
+            <div class="form-group">
+                <label id="replenishLabel"></label>
+                <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required />
+            </div>
+            <button type="submit" class="btn btn-success">Пополнить</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Редактировать материал</h2>
+            <span class="close" onclick="closeModal('editModal')">&times;</span>
+        </div>
+        <form method="post" action="/Materials/Edit">
+            <input type="hidden" name="Id" id="editMaterialId" />
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" name="Name" id="editName" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Текущее количество</label>
+                <input type="number" name="Quantity" id="editQuantity" class="form-control" step="0.01" required />
+            </div>
+            <div class="form-group">
+                <label>Единица измерения</label>
+                <select name="UnitOfMeasure" id="editUnit" class="form-control" required>
+                    <option value="кг">кг</option>
+                    <option value="шт">шт</option>
+                    <option value="литр">литр</option>
+                    <option value="м">м</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Минимальный запас</label>
+                <input type="number" name="MinimalStock" id="editMinStock" class="form-control" step="0.01" required />
+            </div>
+            <button type="submit" class="btn btn-warning">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showAddModal() {
+        document.getElementById('addModal').style.display = 'block';
+    }
+
+    function showReplenishModal(id, name, unit) {
+        document.getElementById('replenishMaterialId').value = id;
+        document.getElementById('replenishLabel').textContent = `Сколько ${unit} добавить для "${name}"?`;
+        document.getElementById('replenishModal').style.display = 'block';
+    }
+
+    function showEditModal(id, name, quantity, minStock, unit) {
+        document.getElementById('editMaterialId').value = id;
+        document.getElementById('editName').value = name;
+        document.getElementById('editQuantity').value = quantity;
+        document.getElementById('editMinStock').value = minStock;
+        document.getElementById('editUnit').value = unit;
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    // Закрытие модального окна при клике вне его
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    }
+</script>

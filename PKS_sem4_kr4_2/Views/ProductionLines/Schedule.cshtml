@@ -1,0 +1,102 @@
+@model PKS_sem4_kr4_2.Models.ProductionLine
+@{
+    ViewData["Title"] = $"Расписание линии: {Model.Name}";
+}
+
+<div class="page-header">
+    <h1>📅 Расписание: @Model.Name</h1>
+    <a href="/ProductionLines" class="btn btn-secondary">← Назад к линиям</a>
+</div>
+
+<div class="schedule-info">
+    <div class="info-card">
+        <strong>Статус:</strong>
+        <span class="status-badge @(Model.Status == "Active" ? "status-inprogress" : "status-cancelled")">
+            @Model.Status
+        </span>
+    </div>
+    <div class="info-card">
+        <strong>Эффективность:</strong>
+        <span>@Model.EfficiencyFactor.ToString("F1")x</span>
+    </div>
+    <div class="info-card">
+        <strong>Текущий заказ:</strong>
+        <span>@(Model.CurrentWorkOrder != null ? $"#{Model.CurrentWorkOrder.Id} - {Model.CurrentWorkOrder.Product?.Name}" : "Нет")</span>
+    </div>
+</div>
+
+<h2>Назначенные заказы</h2>
+
+@if (Model.WorkOrders != null && Model.WorkOrders.Any())
+{
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Номер</th>
+                    <th>Продукт</th>
+                    <th>Количество</th>
+                    <th>Начало</th>
+                    <th>Окончание</th>
+                    <th>Статус</th>
+                    <th>Прогресс</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in Model.WorkOrders.OrderBy(w => w.StartDate))
+                {
+                    <tr>
+                        <td>#@order.Id</td>
+                        <td>@order.Product?.Name</td>
+                        <td>@order.Quantity шт.</td>
+                        <td>@order.StartDate.ToString("dd.MM.yyyy HH:mm")</td>
+                        <td>@order.EstimatedEndDate.ToString("dd.MM.yyyy HH:mm")</td>
+                        <td>
+                            <span class="status-badge status-@order.Status.ToLower()">
+                                @order.Status
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress-bar" style="width: 120px;">
+                                <div class="progress-fill" style="width: @order.ProgressPercent%"></div>
+                                <span>@order.ProgressPercent%</span>
+                            </div>
+                        </td>
+                        <td>
+                            <a href="/WorkOrders/Details/@order.Id" class="btn btn-sm btn-info">📋</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <p class="text-muted">Нет назначенных заказов для этой линии.</p>
+}
+
+<style>
+    .schedule-info {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+    }
+    
+    .info-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .info-card strong {
+        display: block;
+        color: #666;
+        margin-bottom: 5px;
+    }
+</style>

@@ -1,0 +1,358 @@
+@model IEnumerable<PKS_sem4_kr4_2.Models.WorkOrder>
+@{
+    ViewData["Title"] = "Производственные заказы";
+}
+
+<div class="page-header">
+    <h1>📋 Производственные заказы</h1>
+    <button class="btn btn-primary" onclick="showCreateModal()">+ Новый заказ</button>
+</div>
+
+<!-- Сообщения -->
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<!-- Фильтры -->
+<div class="filters-bar">
+    <form method="get" class="filter-form">
+        <div class="filter-group">
+            <label>Статус:</label>
+            <select name="status" class="form-control" onchange="this.form.submit()">
+                <option value="">Все заказы</option>
+                <option value="active" selected="@(ViewBag.CurrentStatus == "active")">Активные</option>
+                <option value="Pending" selected="@(ViewBag.CurrentStatus == "Pending")">Ожидают</option>
+                <option value="InProgress" selected="@(ViewBag.CurrentStatus == "InProgress")">В процессе</option>
+                <option value="Completed" selected="@(ViewBag.CurrentStatus == "Completed")">Завершены</option>
+                <option value="Cancelled" selected="@(ViewBag.CurrentStatus == "Cancelled")">Отменены</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Дата:</label>
+            <select name="date" class="form-control" onchange="this.form.submit()">
+                <option value="">Все даты</option>
+                <option value="today" selected="@(ViewBag.CurrentDate == "today")">На сегодня</option>
+                <option value="overdue" selected="@(ViewBag.CurrentDate == "overdue")">Просроченные</option>
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- Таблица заказов -->
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Номер</th>
+                <th>Продукт</th>
+                <th>Количество</th>
+                <th>Линия</th>
+                <th>Начало</th>
+                <th>Окончание</th>
+                <th>Статус</th>
+                <th>Прогресс</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model)
+            {
+                var isOverdue = order.Status != "Completed" && order.Status != "Cancelled" && order.EstimatedEndDate < DateTime.Now;
+                <tr class="@(isOverdue ? "low-stock-row" : "")">
+                    <td><strong>#@order.Id</strong></td>
+                    <td>
+                        <a href="/WorkOrders/Details/@order.Id" class="product-link">
+                            @order.Product?.Name
+                        </a>
+                    </td>
+                    <td>@order.Quantity шт.</td>
+                    <td>@(order.ProductionLine?.Name ?? "Не назначена")</td>
+                    <td>@order.StartDate.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>
+                        @order.EstimatedEndDate.ToString("dd.MM.yyyy HH:mm")
+                        @if (isOverdue)
+                        {
+                            <br /><span class="text-danger fw-bold">⚠️ Просрочен!</span>
+                        }
+                    </td>
+                    <td>
+                        <span class="status-badge status-@order.Status.ToLower()">
+                            @switch (order.Status)
+                            {
+                                case "Pending": <text>⏳ Ожидает</text> break;
+                                case "InProgress": <text>⚙️ В процессе</text> break;
+                                case "Completed": <text>✅ Завершён</text> break;
+                                case "Cancelled": <text>❌ Отменён</text> break;
+                            }
+                        </span>
+                    </td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: @order.ProgressPercent%"></div>
+                            <span>@order.ProgressPercent%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="/WorkOrders/Details/@order.Id" class="btn btn-sm btn-info">📋</a>
+
+                            @if (order.Status == "Pending")
+                            {
+                                <button class="btn btn-sm btn-success" 
+                                        onclick="showStartModal(@order.Id, @order.ProductId, '@order.Product?.Name', @order.Quantity)">
+                                    ▶️ Запустить
+                                </button>
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="cancelOrder(@order.Id)">
+                                    ❌ Отменить
+                                </button>
+                            }
+                            
+                            @if (order.Status == "InProgress")
+                            {
+                                <button class="btn btn-sm btn-primary" 
+                                        onclick="showProgressModal(@order.Id, @order.ProgressPercent)">
+                                    📊 Прогресс
+                                </button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно создания заказа -->
+<div id="createModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2>Создать новый заказ</h2>
+            <span class="close" onclick="closeModal('createModal')">&times;</span>
+        </div>
+        <form method="post" action="/WorkOrders/Create" id="createOrderForm">
+            <div class="form-group">
+                <label>Продукт</label>
+                <select name="productId" id="createProductId" class="form-control" required onchange="updateProductionInfo()">
+                    <option value="">Выберите продукт...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Количество</label>
+                <input type="number" name="quantity" id="createQuantity" class="form-control" min="1" required onchange="updateProductionInfo()" />
+            </div>
+            <div class="form-group">
+                <label>Производственная линия</label>
+                <select name="productionLineId" id="createLineId" class="form-control" onchange="updateProductionInfo()">
+                    <option value="">Автоматический выбор</option>
+                </select>
+            </div>
+            
+            <!-- Информация о расчётах -->
+            <div id="calculationInfo" class="calculation-info" style="display:none;">
+                <div class="info-row">
+                    <span>⏱️ Расчётное время:</span>
+                    <strong id="calcTime">-</strong>
+                </div>
+                <div class="info-row">
+                    <span>📅 Дата завершения:</span>
+                    <strong id="calcEndDate">-</strong>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Создать заказ</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно запуска производства -->
+<div id="startModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Запустить производство</h2>
+            <span class="close" onclick="closeModal('startModal')">&times;</span>
+        </div>
+        <form method="post" action="/WorkOrders/StartProduction">
+            <input type="hidden" name="orderId" id="startOrderId" />
+            <div class="form-group">
+                <label>Заказ: <strong id="startOrderInfo"></strong></label>
+            </div>
+            <div class="form-group">
+                <label>Производственная линия</label>
+                <select name="lineId" id="startLineSelect" class="form-control" required>
+                    <option value="">Выберите линию...</option>
+                </select>
+            </div>
+            <div class="alert alert-warning">
+                ⚠️ При запуске материалы будут списаны со склада!
+            </div>
+            <button type="submit" class="btn btn-success">Запустить производство</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно обновления прогресса -->
+<div id="progressModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Обновить прогресс</h2>
+            <span class="close" onclick="closeModal('progressModal')">&times;</span>
+        </div>
+        <form method="post" action="/WorkOrders/UpdateProgress">
+            <input type="hidden" name="orderId" id="progressOrderId" />
+            <div class="form-group">
+                <label>Прогресс выполнения (%)</label>
+                <input type="range" name="percent" id="progressPercent" class="form-control" 
+                       min="0" max="100" step="5" oninput="document.getElementById('progressValue').textContent = this.value + '%'" />
+                <div style="text-align:center; font-size: 2rem; font-weight: bold; margin-top: 10px;" id="progressValue">50%</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Обновить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Загрузка данных для выпадающих списков при открытии страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        loadProducts();
+        loadLines();
+    });
+
+    function loadProducts() {
+        fetch('/api/products/list')
+            .then(response => response.json())
+            .then(products => {
+                const select = document.getElementById('createProductId');
+                products.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `${p.name} (${p.productionTimePerUnit} мин/шт)`;
+                    option.dataset.prodTime = p.productionTimePerUnit;
+                    select.appendChild(option);
+                });
+            });
+    }
+
+    function loadLines() {
+        fetch('/api/lines/available')
+            .then(response => response.json())
+            .then(lines => {
+                const createSelect = document.getElementById('createLineId');
+                const startSelect = document.getElementById('startLineSelect');
+                
+                lines.forEach(l => {
+                    // Для создания заказа
+                    const option1 = document.createElement('option');
+                    option1.value = l.id;
+                    option1.textContent = `${l.name} (Эффективность: ${l.efficiencyFactor}x)`;
+                    option1.dataset.efficiency = l.efficiencyFactor;
+                    createSelect.appendChild(option1);
+                    
+                    // Для запуска производства
+                    const option2 = document.createElement('option');
+                    option2.value = l.id;
+                    option2.textContent = `${l.name} (Эффективность: ${l.efficiencyFactor}x)`;
+                    startSelect.appendChild(option2);
+                });
+            });
+    }
+
+    function updateProductionInfo() {
+        const productSelect = document.getElementById('createProductId');
+        const quantityInput = document.getElementById('createQuantity');
+        const lineSelect = document.getElementById('createLineId');
+        const calcInfo = document.getElementById('calculationInfo');
+        
+        if (!productSelect.value || !quantityInput.value) {
+            calcInfo.style.display = 'none';
+            return;
+        }
+        
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        const prodTime = parseInt(selectedOption.dataset.prodTime) || 10;
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        let efficiency = 1.0;
+        if (lineSelect.value) {
+            const lineOption = lineSelect.options[lineSelect.selectedIndex];
+            efficiency = parseFloat(lineOption.dataset.efficiency) || 1.0;
+        }
+        
+        const totalMinutes = Math.ceil((quantity * prodTime) / efficiency);
+        const endDate = new Date();
+        endDate.setMinutes(endDate.getMinutes() + totalMinutes);
+        
+        document.getElementById('calcTime').textContent = `${totalMinutes} минут`;
+        document.getElementById('calcEndDate').textContent = endDate.toLocaleString('ru-RU');
+        calcInfo.style.display = 'block';
+    }
+
+    function showCreateModal() {
+        document.getElementById('createModal').style.display = 'block';
+    }
+
+    function showStartModal(orderId, productId, productName, quantity) {
+        document.getElementById('startOrderId').value = orderId;
+        document.getElementById('startOrderInfo').textContent = 
+            `#${orderId} - ${productName} (${quantity} шт.)`;
+        document.getElementById('startModal').style.display = 'block';
+    }
+
+    function showProgressModal(orderId, currentProgress) {
+        document.getElementById('progressOrderId').value = orderId;
+        document.getElementById('progressPercent').value = currentProgress;
+        document.getElementById('progressValue').textContent = currentProgress + '%';
+        document.getElementById('progressModal').style.display = 'block';
+    }
+
+    function cancelOrder(orderId) {
+        if (confirm('Вы уверены, что хотите отменить заказ #' + orderId + '?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/WorkOrders/CancelOrder';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'orderId';
+            input.value = orderId;
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    }
+</script>
+
+<style>
+    .calculation-info {
+        background: #e8eaf6;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+    }
+    
+    .info-row strong {
+        color: #1a237e;
+    }
+</style>

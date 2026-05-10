@@ -1,0 +1,192 @@
+@model PKS_sem4_kr4_2.Models.WorkOrder
+@{
+    ViewData["Title"] = $"Заказ #{Model.Id}";
+}
+
+<div class="page-header">
+    <h1>📋 Заказ #@Model.Id</h1>
+    <a href="/WorkOrders" class="btn btn-secondary">← Назад к списку</a>
+</div>
+
+<div class="details-grid">
+    <!-- Основная информация -->
+    <div class="details-card">
+        <h3>📦 Информация о заказе</h3>
+        <table class="details-table">
+            <tr>
+                <td>Продукт:</td>
+                <td><strong>@Model.Product?.Name</strong></td>
+            </tr>
+            <tr>
+                <td>Категория:</td>
+                <td><span class="category-badge">@Model.Product?.Category</span></td>
+            </tr>
+            <tr>
+                <td>Количество:</td>
+                <td><strong>@Model.Quantity шт.</strong></td>
+            </tr>
+            <tr>
+                <td>Статус:</td>
+                <td>
+                    <span class="status-badge status-@Model.Status.ToLower()">
+                        @Model.Status
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Прогресс:</td>
+                <td>
+                    <div class="progress-bar" style="width: 200px;">
+                        <div class="progress-fill" style="width: @Model.ProgressPercent%"></div>
+                        <span>@Model.ProgressPercent%</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Информация о времени -->
+    <div class="details-card">
+        <h3>⏱️ Временные рамки</h3>
+        <table class="details-table">
+            <tr>
+                <td>Начало:</td>
+                <td>@Model.StartDate.ToString("dd.MM.yyyy HH:mm")</td>
+            </tr>
+            <tr>
+                <td>Расчётное завершение:</td>
+                <td><strong>@Model.EstimatedEndDate.ToString("dd.MM.yyyy HH:mm")</strong></td>
+            </tr>
+            <tr>
+                <td>Фактическое завершение:</td>
+                <td>@(Model.ActualEndDate?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+            </tr>
+            <tr>
+                <td>Производственная линия:</td>
+                <td>@(Model.ProductionLine?.Name ?? "Не назначена")</td>
+            </tr>
+            <tr>
+                <td>Эффективность линии:</td>
+                <td>@(Model.ProductionLine?.EfficiencyFactor.ToString("F1") ?? "—")x</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Время производства -->
+    <div class="details-card">
+        <h3>🕐 Расчёт производства</h3>
+        <table class="details-table">
+            <tr>
+                <td>Время на единицу:</td>
+                <td>@Model.Product?.ProductionTimePerUnit мин</td>
+            </tr>
+            <tr>
+                <td>Общее время (без учёта эфф.):</td>
+                <td>@(Model.Quantity * (Model.Product?.ProductionTimePerUnit ?? 0)) мин</td>
+            </tr>
+            <tr>
+                <td>С учётом эффективности линии:</td>
+                <td>
+                    @{
+                        var effectiveTime = Model.ProductionLine != null 
+                            ? (Model.Quantity * (Model.Product?.ProductionTimePerUnit ?? 0)) / (double)Model.ProductionLine.EfficiencyFactor
+                            : Model.Quantity * (Model.Product?.ProductionTimePerUnit ?? 0);
+                    }
+                    @Math.Ceiling(effectiveTime) мин
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Необходимые материалы -->
+    <div class="details-card">
+        <h3>🧱 Необходимые материалы</h3>
+        @if (Model.Product?.ProductMaterials != null && Model.Product.ProductMaterials.Any())
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Материал</th>
+                        <th>На единицу</th>
+                        <th>Всего нужно</th>
+                        <th>В наличии</th>
+                        <th>Достаточно?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pm in Model.Product.ProductMaterials)
+                    {
+                        var totalNeeded = pm.QuantityNeeded * Model.Quantity;
+                        var isEnough = pm.Material != null && pm.Material.Quantity >= totalNeeded;
+                        <tr class="@(isEnough ? "" : "low-stock-row")">
+                            <td>@pm.Material?.Name</td>
+                            <td>@pm.QuantityNeeded @pm.Material?.UnitOfMeasure</td>
+                            <td>@totalNeeded @pm.Material?.UnitOfMeasure</td>
+                            <td>@pm.Material?.Quantity @pm.Material?.UnitOfMeasure</td>
+                            <td>
+                                @if (isEnough)
+                                {
+                                    <span class="status-badge status-ok">✅ Да</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge status-warning">❌ Нет (не хватает @(totalNeeded - (pm.Material?.Quantity ?? 0)))</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="text-muted">Для этого продукта не указаны материалы.</p>
+        }
+    </div>
+</div>
+
+<style>
+    .details-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    
+    .details-card {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .details-card h3 {
+        color: #1a237e;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .details-table {
+        width: 100%;
+    }
+    
+    .details-table td {
+        padding: 8px 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    
+    .details-table td:first-child {
+        color: #666;
+        width: 50%;
+    }
+    
+    .details-table td:last-child {
+        font-weight: 500;
+    }
+    
+    @@media (max-width: 768px) {
+        .details-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

@@ -1,0 +1,168 @@
+@model IEnumerable<PKS_sem4_kr4_2.Models.Product>
+@{
+    ViewData["Title"] = "Каталог продуктов";
+}
+
+<div class="page-header">
+    <h1>📦 Каталог продуктов</h1>
+    <button class="btn btn-primary" onclick="showAddModal()">+ Новый продукт</button>
+</div>
+
+<!-- Сообщения -->
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<!-- Фильтры -->
+<div class="filters-bar">
+    <form method="get" class="filter-form">
+        <div class="filter-group">
+            <label>Категория:</label>
+            <select name="category" class="form-control" onchange="this.form.submit()">
+                <option value="">Все категории</option>
+                @foreach (var cat in ViewBag.Categories)
+                {
+                    <option value="@cat" selected="@(ViewBag.CurrentCategory == cat)">@cat</option>
+                }
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Поиск:</label>
+            <input type="text" name="search" class="form-control" placeholder="Название продукта..." value="@ViewBag.CurrentSearch" />
+            <button type="submit" class="btn btn-primary">🔍</button>
+        </div>
+    </form>
+</div>
+
+<!-- Таблица продуктов -->
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Время производства</th>
+                <th>Категория</th>
+                <th>Мин. запас</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Model)
+            {
+                <tr>
+                    <td>
+                        <a href="/Products/Details/@product.Id" class="product-link">@product.Name</a>
+                    </td>
+                    <td>@product.ProductionTimePerUnit мин/шт</td>
+                    <td><span class="category-badge">@product.Category</span></td>
+                    <td>@product.MinimalStock</td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="/Products/Details/@product.Id" class="btn btn-sm btn-info">📋</a>
+                            <button class="btn btn-sm btn-warning" onclick="showEditModal(@product.Id, '@product.Name', '@product.Description', '@product.Category', @product.ProductionTimePerUnit, @product.MinimalStock)">
+                                ✏️
+                            </button>
+                            <a href="/Products/Delete/@product.Id" class="btn btn-sm btn-danger" onclick="return confirm('Удалить продукт?')">
+                                🗑️
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно добавления продукта -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Новый продукт</h2>
+            <span class="close" onclick="closeModal('addModal')">&times;</span>
+        </div>
+        <form method="post" action="/Products/Create">
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" name="Name" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea name="Description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Категория</label>
+                <input type="text" name="Category" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Время производства (мин/шт)</label>
+                <input type="number" name="ProductionTimePerUnit" class="form-control" min="1" required />
+            </div>
+            <div class="form-group">
+                <label>Минимальный запас</label>
+                <input type="number" name="MinimalStock" class="form-control" min="0" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Создать</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Редактировать продукт</h2>
+            <span class="close" onclick="closeModal('editModal')">&times;</span>
+        </div>
+        <form method="post" action="/Products/Edit">
+            <input type="hidden" name="Id" id="editProductId" />
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" name="Name" id="editName" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea name="Description" id="editDescription" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Категория</label>
+                <input type="text" name="Category" id="editCategory" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label>Время производства (мин/шт)</label>
+                <input type="number" name="ProductionTimePerUnit" id="editProdTime" class="form-control" min="1" required />
+            </div>
+            <div class="form-group">
+                <label>Минимальный запас</label>
+                <input type="number" name="MinimalStock" id="editMinStock" class="form-control" min="0" required />
+            </div>
+            <button type="submit" class="btn btn-warning">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showAddModal() {
+        document.getElementById('addModal').style.display = 'block';
+    }
+
+    function showEditModal(id, name, description, category, prodTime, minStock) {
+        document.getElementById('editProductId').value = id;
+        document.getElementById('editName').value = name;
+        document.getElementById('editDescription').value = description || '';
+        document.getElementById('editCategory').value = category || '';
+        document.getElementById('editProdTime').value = prodTime;
+        document.getElementById('editMinStock').value = minStock;
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    }
+</script>

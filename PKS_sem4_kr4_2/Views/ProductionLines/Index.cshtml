@@ -1,0 +1,241 @@
+@model IEnumerable<PKS_sem4_kr4_2.Models.ProductionLine>
+@{
+    ViewData["Title"] = "Производственные линии";
+}
+
+<div class="page-header">
+    <h1>⚙️ Производственные линии</h1>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<div class="lines-grid">
+    @foreach (var line in Model)
+    {
+        <div class="line-card @(line.Status == "Active" ? "line-active" : "line-stopped")">
+            <div class="line-header">
+                <h3>@line.Name</h3>
+                <span class="status-badge @(line.Status == "Active" ? "status-inprogress" : "status-cancelled")">
+                    @(line.Status == "Active" ? "🟢 Работает" : "🔴 Остановлена")
+                </span>
+            </div>
+
+            <div class="line-body">
+                <!-- Текущий заказ -->
+                <div class="line-info">
+                    <strong>Текущий заказ:</strong>
+                    @if (line.CurrentWorkOrder != null)
+                    {
+                        <div class="current-order">
+                            <span>@line.CurrentWorkOrder.Product?.Name</span>
+                            <span class="text-muted">(#@line.CurrentWorkOrder.Id)</span>
+                            <div class="progress-bar" style="width: 100%; margin-top: 10px;">
+                                <div class="progress-fill" style="width: @line.CurrentWorkOrder.ProgressPercent%"></div>
+                                <span>@line.CurrentWorkOrder.ProgressPercent%</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Нет активного заказа</span>
+                    }
+                </div>
+
+                <!-- Коэффициент эффективности -->
+                <div class="line-info">
+                    <strong>Эффективность:</strong>
+                    <div class="efficiency-control">
+                        <span class="efficiency-value @(line.EfficiencyFactor >= 1 ? "text-success" : "text-warning")">
+                            @line.EfficiencyFactor.ToString("F1")x
+                        </span>
+                        <div class="efficiency-buttons">
+                            <button class="btn btn-sm btn-secondary" onclick="updateEfficiency(@line.Id, @(line.EfficiencyFactor + 0.1))">+</button>
+                            <button class="btn btn-sm btn-secondary" onclick="updateEfficiency(@line.Id, @(line.EfficiencyFactor - 0.1))">−</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ближайшие заказы -->
+                <div class="line-info">
+                    <strong>Назначенные заказы:</strong>
+                    @if (line.WorkOrders != null && line.WorkOrders.Any(w => w.Status == "Pending" || w.Status == "InProgress"))
+                    {
+                        <ul class="order-list">
+                            @foreach (var order in line.WorkOrders.Where(w => w.Status == "Pending" || w.Status == "InProgress").Take(3))
+                            {
+                                <li>
+                                    <span>#@order.Id - @order.Product?.Name</span>
+                                    <span class="text-muted">(@order.Quantity шт.)</span>
+                                    <span class="status-badge status-@order.Status.ToLower()">@order.Status</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Нет назначенных заказов</span>
+                    }
+                </div>
+            </div>
+
+            <div class="line-footer">
+                @if (line.Status == "Active")
+                {
+                    <button class="btn btn-danger btn-sm" onclick="updateStatus(@line.Id, 'Stopped')">
+                        ⏹️ Остановить
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-success btn-sm" onclick="updateStatus(@line.Id, 'Active')">
+                        ▶️ Запустить
+                    </button>
+                }
+                <a href="/ProductionLines/Schedule/@line.Id" class="btn btn-info btn-sm">
+                    📅 Расписание
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+<script>
+    function updateStatus(lineId, status) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/ProductionLines/UpdateStatus';
+        form.innerHTML = `
+            <input type="hidden" name="lineId" value="${lineId}" />
+            <input type="hidden" name="status" value="${status}" />
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    function updateEfficiency(lineId, value) {
+        value = Math.max(0.5, Math.min(2.0, value));
+        value = Math.round(value * 10) / 10; // Округляем до 1 знака
+        
+        if (confirm(`Изменить коэффициент эффективности на ${value.toFixed(1)}x?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/ProductionLines/UpdateEfficiency';
+            form.innerHTML = `
+                <input type="hidden" name="lineId" value="${lineId}" />
+                <input type="hidden" name="efficiencyFactor" value="${value}" />
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+</script>
+
+<style>
+    .lines-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+        gap: 25px;
+    }
+
+    .line-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .line-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .line-active {
+        border-top: 4px solid #43a047;
+    }
+
+    .line-stopped {
+        border-top: 4px solid #e53935;
+        opacity: 0.8;
+    }
+
+    .line-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        background: #f5f5f5;
+    }
+
+    .line-header h3 {
+        margin: 0;
+        color: #1a237e;
+    }
+
+    .line-body {
+        padding: 20px;
+    }
+
+    .line-info {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .line-info:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    .line-info strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #666;
+    }
+
+    .current-order {
+        background: #e8f5e9;
+        padding: 10px;
+        border-radius: 8px;
+    }
+
+    .efficiency-control {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .efficiency-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+
+    .efficiency-buttons {
+        display: flex;
+        gap: 5px;
+    }
+
+    .order-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .order-list li {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 0.9rem;
+    }
+
+    .line-footer {
+        padding: 15px 20px;
+        background: #fafafa;
+        display: flex;
+        gap: 10px;
+    }
+</style>
