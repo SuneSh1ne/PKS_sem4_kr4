@@ -1,0 +1,41 @@
+@model TouristGuide.Models.Attraction
+
+<h1>@Model.Name</h1>
+<hr />
+
+<div class="row">
+    <div class="col-md-6">
+        <img src="@Model.PhotoPath" class="img-fluid" alt="@Model.Name" 
+             onerror="this.src='/images/placeholder.jpg'" />
+    </div>
+    <div class="col-md-6">
+        <dl class="row">
+            <dt class="col-sm-6">Город:</dt>
+            <dd class="col-sm-6">
+                <a asp-controller="Cities" asp-action="Details" asp-route-id="@Model.CityId">
+                    @Model.City.Name
+                </a>
+            </dd>
+
+            <dt class="col-sm-6">Часы работы:</dt>
+            <dd class="col-sm-6">@Model.WorkingHours</dd>
+
+            <dt class="col-sm-6">Стоимость:</dt>
+            <dd class="col-sm-6">
+                @if (Model.EntryFee == 0 || Model.EntryFee == null)
+                {
+                    <span class="text-success">Бесплатно</span>
+                }
+                else
+                {
+                    <span>@Model.EntryFee.Value.ToString("C2")</span>
+                }
+            </dd>
+
+            <dt class="col-sm-6">История:</dt>
+            <dd class="col-sm-6">@Model.History</dd>
+        </dl>
+    </div>
+</div>
+
+<a href="javascript:history.back()" class="btn btn-secondary mt-3">Назад</a>

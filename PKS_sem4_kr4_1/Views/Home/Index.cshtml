@@ -1,0 +1,33 @@
+@model IEnumerable<TouristGuide.Models.City>
+
+<h1>Туристический путеводитель</h1>
+
+<form asp-controller="Home" asp-action="Index" method="get" class="search-form">
+    <div class="input-group mb-3">
+        <input type="text" name="searchString" class="form-control" 
+               placeholder="Введите название города..." value="@ViewData["CurrentSearch"]" />
+        <button type="submit" class="btn btn-primary">Поиск</button>
+        <a asp-action="Index" class="btn btn-secondary">Сбросить</a>
+    </div>
+</form>
+
+<div class="row">
+    @foreach (var city in Model)
+    {
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <img src="@city.PhotoPath" class="card-img-top" alt="@city.Name" 
+                     onerror="this.src='/images/placeholder.jpg'" />
+                <div class="card-body">
+                    <h5 class="card-title">@city.Name</h5>
+                    <p class="card-text">
+                        <strong>Регион:</strong> @city.Region<br />
+                        <strong>Население:</strong> @city.Population.ToString("N0") чел.
+                    </p>
+                    <a asp-controller="Cities" asp-action="Details" asp-route-id="@city.Id" 
+                       class="btn btn-primary">Подробнее</a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
