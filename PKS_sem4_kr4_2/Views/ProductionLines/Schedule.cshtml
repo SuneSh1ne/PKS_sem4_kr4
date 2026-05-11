@@ -19,10 +19,6 @@
         <strong>Эффективность:</strong>
         <span>@Model.EfficiencyFactor.ToString("F1")x</span>
     </div>
-    <div class="info-card">
-        <strong>Текущий заказ:</strong>
-        <span>@(Model.CurrentWorkOrder != null ? $"#{Model.CurrentWorkOrder.Id} - {Model.CurrentWorkOrder.Product?.Name}" : "Нет")</span>
-    </div>
 </div>
 
 <h2>Назначенные заказы</h2>

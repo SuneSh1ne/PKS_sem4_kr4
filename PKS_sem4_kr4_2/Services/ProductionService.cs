@@ -14,8 +14,7 @@ namespace PKS_sem4_kr4_2.Services
         }
 
         /// <summary>
-        /// Рассчитывает время производства заказа
-        /// Время = (Количество × ВремяНаЕдиницу) / КоэффициентЭффективности
+        /// Рассчитывает время производства заказа в минутах
         /// </summary>
         public async Task<int> CalculateProductionTime(int productId, int quantity, int? lineId = null)
         {
@@ -31,32 +30,22 @@ namespace PKS_sem4_kr4_2.Services
                     efficiency = line.EfficiencyFactor;
             }
 
+            // Время = (Количество × ВремяНаЕдиницу) / Эффективность
             return (int)Math.Ceiling((quantity * product.ProductionTimePerUnit) / efficiency);
         }
 
         /// <summary>
-        /// Рассчитывает дату завершения заказа
+        /// Рассчитывает дату завершения заказа (простой расчёт)
         /// </summary>
-        public DateTime CalculateEndDate(DateTime startDate, int totalMinutes, int workingHoursPerDay = 8)
+        public DateTime CalculateEndDate(DateTime startDate, int totalMinutes)
         {
-            int minutesPerDay = workingHoursPerDay * 60;
-            int totalDays = (int)Math.Ceiling((double)totalMinutes / minutesPerDay);
-            
-            // Учитываем только рабочие дни (упрощённо: исключаем выходные)
-            DateTime endDate = startDate;
-            int daysAdded = 0;
-            while (daysAdded < totalDays)
-            {
-                endDate = endDate.AddDays(1);
-                if (endDate.DayOfWeek != DayOfWeek.Saturday && endDate.DayOfWeek != DayOfWeek.Sunday)
-                    daysAdded++;
-            }
-            
-            return endDate;
+            // Просто прибавляем минуты к текущему времени
+            // Без учёта рабочих часов, чтобы было понятно
+            return startDate.AddMinutes(totalMinutes);
         }
 
         /// <summary>
-        /// Проверяет, достаточно ли материалов на складе для производства
+        /// Проверяет, достаточно ли материалов для производства
         /// </summary>
         public async Task<Dictionary<string, decimal>> CheckMaterialsAvailability(int productId, int quantity)
         {
@@ -80,7 +69,7 @@ namespace PKS_sem4_kr4_2.Services
         }
 
         /// <summary>
-        /// Списывает материалы со склада при запуске производства
+        /// Списывает материалы со склада
         /// </summary>
         public async Task ConsumeMaterials(int productId, int quantity)
         {
@@ -101,17 +90,45 @@ namespace PKS_sem4_kr4_2.Services
         }
 
         /// <summary>
-        /// Получает список материалов с низким запасом
+        /// Возвращает материалы на склад при отмене заказа.
+        /// Возвращается количество пропорционально НЕВЫПОЛНЕННОМУ проценту.
+        /// remainingPercent - процент, который остался до завершения (100 - progress)
+        /// Округление ВНИЗ при дробном результате.
         /// </summary>
-        public async Task<List<Material>> GetLowStockMaterials()
+        public async Task ReturnMaterials(int productId, int quantity, int remainingPercent)
         {
-            return await _context.Materials
-                .Where(m => m.Quantity < m.MinimalStock)
+            if (remainingPercent <= 0) return;
+
+            var productMaterials = await _context.ProductMaterials
+                .Where(pm => pm.ProductId == productId)
                 .ToListAsync();
+
+            decimal percentMultiplier = remainingPercent / 100m;
+
+            foreach (var pm in productMaterials)
+            {
+                var material = await _context.Materials.FindAsync(pm.MaterialId);
+                if (material != null)
+                {
+                    // Сколько материала нужно вернуть = всего_потрачено * процент_оставшийся
+                    decimal totalUsed = pm.QuantityNeeded * quantity;
+                    decimal amountToReturn = totalUsed * percentMultiplier;
+                    
+                    // Округляем ВНИЗ (Math.Floor)
+                    amountToReturn = Math.Floor(amountToReturn);
+                    
+                    if (amountToReturn > 0)
+                    {
+                        material.Quantity += amountToReturn;
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         /// <summary>
-        /// Получает список доступных производственных линий
+        /// Получает список доступных линий
         /// </summary>
         public async Task<List<ProductionLine>> GetAvailableLines()
         {
@@ -121,44 +138,71 @@ namespace PKS_sem4_kr4_2.Services
         }
 
         /// <summary>
-        /// Запускает заказ в производство
+        /// Рассчитывает текущий прогресс заказа на основе прошедшего времени
         /// </summary>
-        public async Task StartWorkOrder(int orderId, int lineId)
+        public async Task<int> CalculateCurrentProgress(int orderId)
         {
-            var order = await _context.WorkOrders.FindAsync(orderId);
-            var line = await _context.ProductionLines.FindAsync(lineId);
+            var order = await _context.WorkOrders
+                .Include(w => w.Product)
+                .Include(w => w.ProductionLine)
+                .FirstOrDefaultAsync(w => w.Id == orderId);
 
-            if (order == null || line == null)
-                throw new Exception("Заказ или линия не найдены");
+            if (order == null || order.Status != "InProgress")
+                return order?.ProgressPercent ?? 0;
 
-            if (line.CurrentWorkOrderId != null)
-                throw new Exception("Линия уже занята");
+            // Если заказ ещё не начался (будущая дата)
+            if (order.StartDate > DateTime.Now)
+                return 0;
 
-            // Проверяем материалы
-            var shortages = await CheckMaterialsAvailability(order.ProductId, order.Quantity);
-            if (shortages.Any())
+            // Общее необходимое время в минутах
+            int totalMinutes = await CalculateProductionTime(
+                order.ProductId, 
+                order.Quantity, 
+                order.ProductionLineId);
+
+            // Прошедшее время с начала в минутах
+            int elapsedMinutes = (int)(DateTime.Now - order.StartDate).TotalMinutes;
+
+            // Прогресс = (прошедшее / общее) * 100
+            int progress = (int)Math.Min(100, Math.Round(((double)elapsedMinutes / totalMinutes) * 100));
+
+            return progress;
+        }
+
+        /// <summary>
+        /// Обновляет прогресс всех активных заказов
+        /// </summary>
+        public async Task UpdateAllProgresses()
+        {
+            var activeOrders = await _context.WorkOrders
+                .Where(w => w.Status == "InProgress")
+                .Include(w => w.ProductionLine)
+                .ToListAsync();
+
+            foreach (var order in activeOrders)
             {
-                var shortageList = string.Join(", ", shortages.Select(s => $"{s.Key}: не хватает {s.Value}"));
-                throw new Exception($"Недостаточно материалов: {shortageList}");
+                int progress = await CalculateCurrentProgress(order.Id);
+                
+                order.ProgressPercent = progress;
+
+                if (progress >= 100)
+                {
+                    order.Status = "Completed";
+                    order.ActualEndDate = DateTime.Now;
+                    order.ProgressPercent = 100;
+                    
+                    // Освобождаем линию
+                    if (order.ProductionLine != null && order.ProductionLine.CurrentWorkOrderId == order.Id)
+                    {
+                        order.ProductionLine.CurrentWorkOrderId = null;
+                    }
+                }
             }
 
-            // Списываем материалы
-            await ConsumeMaterials(order.ProductId, order.Quantity);
-
-            // Назначаем заказ на линию
-            order.ProductionLineId = lineId;
-            order.Status = "InProgress";
-            order.StartDate = DateTime.Now;
-            
-            // Рассчитываем время завершения
-            int totalMinutes = await CalculateProductionTime(order.ProductId, order.Quantity, lineId);
-            order.EstimatedEndDate = CalculateEndDate(DateTime.Now, totalMinutes);
-            order.ProgressPercent = 0;
-
-            // Обновляем линию
-            line.CurrentWorkOrderId = orderId;
-
-            await _context.SaveChangesAsync();
+            if (activeOrders.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

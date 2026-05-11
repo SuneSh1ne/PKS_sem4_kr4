@@ -11,11 +11,17 @@
 {
     <div class="alert alert-success">@TempData["Success"]</div>
 }
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
 
 <div class="lines-grid">
     @foreach (var line in Model)
     {
-        <div class="line-card @(line.Status == "Active" ? "line-active" : "line-stopped")">
+        var efficiencyStr = line.EfficiencyFactor.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        
+        <div class="line-card @(line.Status == "Active" ? "line-active" : "line-stopped")" data-line-id="@line.Id">
             <div class="line-header">
                 <h3>@line.Name</h3>
                 <span class="status-badge @(line.Status == "Active" ? "status-inprogress" : "status-cancelled")">
@@ -48,14 +54,21 @@
                 <div class="line-info">
                     <strong>Эффективность:</strong>
                     <div class="efficiency-control">
-                        <span class="efficiency-value @(line.EfficiencyFactor >= 1 ? "text-success" : "text-warning")">
-                            @line.EfficiencyFactor.ToString("F1")x
+                        <span class="efficiency-value @(line.EfficiencyFactor >= 1 ? "text-success" : line.EfficiencyFactor <= 0.3 ? "text-danger" : "text-warning")" id="efficiency-value-@line.Id">
+                            @efficiencyStr x
                         </span>
                         <div class="efficiency-buttons">
-                            <button class="btn btn-sm btn-secondary" onclick="updateEfficiency(@line.Id, @(line.EfficiencyFactor + 0.1))">+</button>
-                            <button class="btn btn-sm btn-secondary" onclick="updateEfficiency(@line.Id, @(line.EfficiencyFactor - 0.1))">−</button>
+                            <button type="button" class="btn btn-sm btn-success efficiency-btn" 
+                                    data-line-id="@line.Id" 
+                                    data-current="@efficiencyStr" 
+                                    data-delta="0.1">➕</button>
+                            <button type="button" class="btn btn-sm btn-warning efficiency-btn" 
+                                    data-line-id="@line.Id" 
+                                    data-current="@efficiencyStr" 
+                                    data-delta="-0.1">➖</button>
                         </div>
                     </div>
+                    <small class="text-muted">Диапазон: 0.1 — 2.0 | Шаг: 0.1</small>
                 </div>
 
                 <!-- Ближайшие заказы -->
@@ -84,13 +97,13 @@
             <div class="line-footer">
                 @if (line.Status == "Active")
                 {
-                    <button class="btn btn-danger btn-sm" onclick="updateStatus(@line.Id, 'Stopped')">
+                    <button type="button" class="btn btn-danger btn-sm status-btn" data-line-id="@line.Id" data-status="Stopped">
                         ⏹️ Остановить
                     </button>
                 }
                 else
                 {
-                    <button class="btn btn-success btn-sm" onclick="updateStatus(@line.Id, 'Active')">
+                    <button type="button" class="btn btn-success btn-sm status-btn" data-line-id="@line.Id" data-status="Active">
                         ▶️ Запустить
                     </button>
                 }
@@ -103,34 +116,80 @@
 </div>
 
 <script>
-    function updateStatus(lineId, status) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/ProductionLines/UpdateStatus';
-        form.innerHTML = `
-            <input type="hidden" name="lineId" value="${lineId}" />
-            <input type="hidden" name="status" value="${status}" />
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
-
-    function updateEfficiency(lineId, value) {
-        value = Math.max(0.5, Math.min(2.0, value));
-        value = Math.round(value * 10) / 10; // Округляем до 1 знака
+    // Навешиваем обработчики после загрузки страницы
+    document.addEventListener('DOMContentLoaded', function() {
         
-        if (confirm(`Изменить коэффициент эффективности на ${value.toFixed(1)}x?`)) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/ProductionLines/UpdateEfficiency';
-            form.innerHTML = `
-                <input type="hidden" name="lineId" value="${lineId}" />
-                <input type="hidden" name="efficiencyFactor" value="${value}" />
-            `;
-            document.body.appendChild(form);
-            form.submit();
-        }
-    }
+        // Кнопки изменения эффективности
+        document.querySelectorAll('.efficiency-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var lineId = parseInt(this.getAttribute('data-line-id'));
+                var currentValue = parseFloat(this.getAttribute('data-current'));
+                var delta = parseFloat(this.getAttribute('data-delta'));
+                
+                // Вычисляем новое значение
+                var newValue = currentValue + delta;
+                
+                // Округляем до одного знака после запятой
+                newValue = Math.round(newValue * 10) / 10;
+                
+                // Ограничиваем: минимум 0.1, максимум 2.0
+                newValue = Math.max(0.1, Math.min(2.0, newValue));
+                
+                // Если значение не изменилось — выходим
+                if (newValue === currentValue) {
+                    return;
+                }
+                
+                // Отправляем форму
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/ProductionLines/UpdateEfficiency';
+                
+                var input1 = document.createElement('input');
+                input1.type = 'hidden';
+                input1.name = 'lineId';
+                input1.value = lineId;
+                form.appendChild(input1);
+                
+                var input2 = document.createElement('input');
+                input2.type = 'hidden';
+                input2.name = 'efficiencyFactorStr';
+                // Используем toFixed(1) — всегда даёт строку с точкой
+                input2.value = newValue.toFixed(1);
+                form.appendChild(input2);
+                
+                document.body.appendChild(form);
+                form.submit();
+            });
+        });
+        
+        // Кнопки изменения статуса
+        document.querySelectorAll('.status-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var lineId = this.getAttribute('data-line-id');
+                var status = this.getAttribute('data-status');
+                
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/ProductionLines/UpdateStatus';
+                
+                var input1 = document.createElement('input');
+                input1.type = 'hidden';
+                input1.name = 'lineId';
+                input1.value = lineId;
+                form.appendChild(input1);
+                
+                var input2 = document.createElement('input');
+                input2.type = 'hidden';
+                input2.name = 'status';
+                input2.value = status;
+                form.appendChild(input2);
+                
+                document.body.appendChild(form);
+                form.submit();
+            });
+        });
+    });
 </script>
 
 <style>
@@ -211,11 +270,24 @@
     .efficiency-value {
         font-size: 1.5rem;
         font-weight: bold;
+        min-width: 60px;
     }
 
     .efficiency-buttons {
         display: flex;
-        gap: 5px;
+        gap: 8px;
+    }
+
+    .efficiency-btn {
+        padding: 8px 16px !important;
+        font-size: 1.1rem !important;
+        cursor: pointer;
+        border-radius: 6px !important;
+        transition: all 0.2s;
+    }
+
+    .efficiency-btn:hover {
+        transform: scale(1.1);
     }
 
     .order-list {
@@ -237,5 +309,70 @@
         background: #fafafa;
         display: flex;
         gap: 10px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 24px;
+        background-color: #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #43a047, #66bb6a);
+        border-radius: 12px;
+        transition: width 0.5s ease;
+    }
+
+    .progress-bar span {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .status-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+
+    .status-inprogress {
+        background-color: #cce5ff;
+        color: #004085;
+    }
+
+    .status-cancelled {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+
+    .status-pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .status-completed {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .text-success { color: #43a047 !important; }
+    .text-warning { color: #ff9800 !important; }
+    .text-danger { color: #e53935 !important; }
+    .text-muted { color: #78909c !important; }
+
+    @@media only screen and (max-width: 768px) {
+        .lines-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>

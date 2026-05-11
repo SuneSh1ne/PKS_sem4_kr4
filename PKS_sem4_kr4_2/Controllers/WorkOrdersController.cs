@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using PKS_sem4_kr4_2.Data;
 using PKS_sem4_kr4_2.Models;
@@ -21,12 +20,13 @@ namespace PKS_sem4_kr4_2.Controllers
         // GET: WorkOrders
         public async Task<IActionResult> Index(string? status, string? date)
         {
+            await _productionService.UpdateAllProgresses();
+
             var orders = _context.WorkOrders
                 .Include(w => w.Product)
                 .Include(w => w.ProductionLine)
                 .AsQueryable();
 
-            // Фильтр по статусу
             if (!string.IsNullOrEmpty(status))
             {
                 if (status == "active")
@@ -40,7 +40,6 @@ namespace PKS_sem4_kr4_2.Controllers
                 ViewBag.CurrentStatus = status;
             }
 
-            // Фильтр по дате
             if (!string.IsNullOrEmpty(date))
             {
                 if (date == "today")
@@ -56,7 +55,7 @@ namespace PKS_sem4_kr4_2.Controllers
             }
 
             ViewBag.Statuses = new List<string> { "Pending", "InProgress", "Completed", "Cancelled" };
-            
+
             return View(await orders.OrderByDescending(w => w.Id).ToListAsync());
         }
 
@@ -64,6 +63,8 @@ namespace PKS_sem4_kr4_2.Controllers
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null) return NotFound();
+
+            await _productionService.UpdateAllProgresses();
 
             var order = await _context.WorkOrders
                 .Include(w => w.Product)
@@ -90,25 +91,23 @@ namespace PKS_sem4_kr4_2.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                // Создаём заказ
+                // Просто создаём заказ со статусом Pending
+                // НЕ списываем материалы, НЕ рассчитываем время
                 var order = new WorkOrder
                 {
                     ProductId = productId,
                     Quantity = quantity,
                     ProductionLineId = productionLineId,
-                    StartDate = DateTime.Now,
+                    StartDate = DateTime.MinValue,  // Будет пересчитано при запуске
+                    EstimatedEndDate = DateTime.MinValue,  // Будет пересчитано при запуске
                     Status = "Pending",
                     ProgressPercent = 0
                 };
 
-                // Рассчитываем время производства
-                int totalMinutes = await _productionService.CalculateProductionTime(productId, quantity, productionLineId);
-                order.EstimatedEndDate = _productionService.CalculateEndDate(DateTime.Now, totalMinutes);
-
                 _context.Add(order);
                 await _context.SaveChangesAsync();
 
-                TempData["Success"] = $"Заказ #{order.Id} создан. Расчётное время: {totalMinutes} мин.";
+                TempData["Success"] = $"Заказ #{order.Id} создан. Ожидает запуска.";
             }
             catch (Exception ex)
             {
@@ -118,18 +117,89 @@ namespace PKS_sem4_kr4_2.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // POST: WorkOrders/StartProduction
+        // POST: WorkOrders/StartOrder
         [HttpPost]
-        public async Task<IActionResult> StartProduction(int orderId, int lineId)
+        public async Task<IActionResult> StartOrder(int orderId)
         {
             try
             {
-                await _productionService.StartWorkOrder(orderId, lineId);
-                TempData["Success"] = "Производство запущено!";
+                var order = await _context.WorkOrders
+                    .Include(w => w.Product)
+                    .Include(w => w.ProductionLine)
+                    .FirstOrDefaultAsync(w => w.Id == orderId);
+
+                if (order == null)
+                {
+                    TempData["Error"] = "Заказ не найден";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (order.Status != "Pending")
+                {
+                    TempData["Error"] = "Можно запустить только ожидающий заказ";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Проверяем, что линия назначена и доступна
+                if (order.ProductionLineId == null)
+                {
+                    TempData["Error"] = "Не назначена производственная линия";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var line = await _context.ProductionLines.FindAsync(order.ProductionLineId);
+                if (line == null)
+                {
+                    TempData["Error"] = "Линия не найдена";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (line.Status != "Active")
+                {
+                    TempData["Error"] = "Линия не активна";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (line.CurrentWorkOrderId != null)
+                {
+                    TempData["Error"] = "Линия уже занята другим заказом";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Проверяем материалы
+                var shortages = await _productionService.CheckMaterialsAvailability(order.ProductId, order.Quantity);
+                if (shortages.Any())
+                {
+                    var shortageList = string.Join(", ", shortages.Select(s => $"{s.Key}: не хватает {s.Value}"));
+                    TempData["Error"] = $"Недостаточно материалов: {shortageList}";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // Только теперь списываем материалы
+                await _productionService.ConsumeMaterials(order.ProductId, order.Quantity);
+
+                // Рассчитываем время
+                int totalMinutes = await _productionService.CalculateProductionTime(
+                    order.ProductId, 
+                    order.Quantity, 
+                    order.ProductionLineId);
+
+                // Пересчитываем даты
+                order.StartDate = DateTime.Now;
+                order.EstimatedEndDate = _productionService.CalculateEndDate(DateTime.Now, totalMinutes);
+                order.Status = "InProgress";
+                order.ProgressPercent = 0;
+
+                // Назначаем заказ на линию
+                line.CurrentWorkOrderId = order.Id;
+
+                await _context.SaveChangesAsync();
+
+                TempData["Success"] = $"Заказ #{order.Id} запущен! Расчётное время: {totalMinutes} мин.";
             }
             catch (Exception ex)
             {
-                TempData["Error"] = ex.Message;
+                TempData["Error"] = $"Ошибка: {ex.Message}";
             }
 
             return RedirectToAction(nameof(Index));
@@ -149,48 +219,40 @@ namespace PKS_sem4_kr4_2.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Если заказ выполнялся на линии, освобождаем линию
-            if (order.ProductionLine != null && order.ProductionLine.CurrentWorkOrderId == orderId)
+            if (order.Status == "Completed")
             {
-                order.ProductionLine.CurrentWorkOrderId = null;
+                TempData["Error"] = "Нельзя отменить завершённый заказ";
+                return RedirectToAction(nameof(Index));
             }
+
+            // Если заказ в процессе — останавливаем и возвращаем материалы
+            if (order.Status == "InProgress")
+            {
+                await _productionService.UpdateAllProgresses();
+                
+                int currentProgress = order.ProgressPercent;
+                int remainingPercent = 100 - currentProgress;
+
+                if (remainingPercent > 0)
+                {
+                    await _productionService.ReturnMaterials(order.ProductId, order.Quantity, remainingPercent);
+                }
+
+                // Освобождаем линию
+                if (order.ProductionLine != null && order.ProductionLine.CurrentWorkOrderId == orderId)
+                {
+                    order.ProductionLine.CurrentWorkOrderId = null;
+                }
+            }
+            
+            // Если заказ ожидает (Pending) — просто отменяем, материалы не трогаем
+            // (они ещё не были списаны)
 
             order.Status = "Cancelled";
             order.ProductionLineId = null;
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = $"Заказ #{orderId} отменён";
-            return RedirectToAction(nameof(Index));
-        }
-
-        // POST: WorkOrders/UpdateProgress
-        [HttpPost]
-        public async Task<IActionResult> UpdateProgress(int orderId, int percent)
-        {
-            var order = await _context.WorkOrders
-                .Include(w => w.ProductionLine)
-                .FirstOrDefaultAsync(w => w.Id == orderId);
-
-            if (order == null)
-                return NotFound();
-
-            order.ProgressPercent = percent;
-
-            if (percent >= 100)
-            {
-                order.Status = "Completed";
-                order.ActualEndDate = DateTime.Now;
-                
-                // Освобождаем линию
-                if (order.ProductionLine != null)
-                {
-                    order.ProductionLine.CurrentWorkOrderId = null;
-                }
-            }
-
-            await _context.SaveChangesAsync();
-            TempData["Success"] = $"Прогресс заказа #{orderId} обновлён до {percent}%";
-
+            TempData["Success"] = $"Заказ #{orderId} отменён.";
             return RedirectToAction(nameof(Index));
         }
     }

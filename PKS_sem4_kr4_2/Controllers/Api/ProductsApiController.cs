@@ -31,5 +31,23 @@ namespace PKS_sem4_kr4_2.Controllers.Api
 
             return Ok(products);
         }
+
+        // GET: api/products/5/materials
+        [HttpGet("{id}/materials")]
+        public async Task<IActionResult> GetProductMaterials(int id)
+        {
+            var productMaterials = await _context.ProductMaterials
+                .Where(pm => pm.ProductId == id)
+                .Select(pm => new
+                {
+                    pm.MaterialId,
+                    pm.Material.Name,
+                    pm.Material.UnitOfMeasure,
+                    pm.QuantityNeeded
+                })
+                .ToListAsync();
+
+            return Ok(productMaterials);
+        }
     }
 }

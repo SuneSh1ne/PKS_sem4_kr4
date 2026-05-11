@@ -8,7 +8,6 @@
     <button class="btn btn-primary" onclick="showAddModal()">+ Новый продукт</button>
 </div>
 
-<!-- Сообщения -->
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success">@TempData["Success"]</div>
@@ -43,7 +42,6 @@
                 <th>Название</th>
                 <th>Время производства</th>
                 <th>Категория</th>
-                <th>Мин. запас</th>
                 <th>Действия</th>
             </tr>
         </thead>
@@ -52,16 +50,14 @@
             {
                 <tr>
                     <td>
-                        <a href="/Products/Details/@product.Id" class="product-link">@product.Name</a>
+                        <span class="product-link">@product.Name</span>
                     </td>
                     <td>@product.ProductionTimePerUnit мин/шт</td>
                     <td><span class="category-badge">@product.Category</span></td>
-                    <td>@product.MinimalStock</td>
                     <td>
                         <div class="action-buttons">
-                            <a href="/Products/Details/@product.Id" class="btn btn-sm btn-info">📋</a>
-                            <button class="btn btn-sm btn-warning" onclick="showEditModal(@product.Id, '@product.Name', '@product.Description', '@product.Category', @product.ProductionTimePerUnit, @product.MinimalStock)">
-                                ✏️
+                            <button class="btn btn-sm btn-warning" onclick="showEditModal(@product.Id, '@product.Name', '@product.Description', '@product.Category', @product.ProductionTimePerUnit)">
+                                ✏️ Изменить
                             </button>
                             <a href="/Products/Delete/@product.Id" class="btn btn-sm btn-danger" onclick="return confirm('Удалить продукт?')">
                                 🗑️
@@ -76,7 +72,7 @@
 
 <!-- Модальное окно добавления продукта -->
 <div id="addModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 700px;">
         <div class="modal-header">
             <h2>Новый продукт</h2>
             <span class="close" onclick="closeModal('addModal')">&times;</span>
@@ -88,7 +84,7 @@
             </div>
             <div class="form-group">
                 <label>Описание</label>
-                <textarea name="Description" class="form-control" rows="3"></textarea>
+                <textarea name="Description" class="form-control" rows="2"></textarea>
             </div>
             <div class="form-group">
                 <label>Категория</label>
@@ -96,20 +92,32 @@
             </div>
             <div class="form-group">
                 <label>Время производства (мин/шт)</label>
-                <input type="number" name="ProductionTimePerUnit" class="form-control" min="1" required />
+                <input type="number" name="ProductionTimePerUnit" class="form-control" min="1" value="10" required />
             </div>
-            <div class="form-group">
-                <label>Минимальный запас</label>
-                <input type="number" name="MinimalStock" class="form-control" min="0" required />
+            
+            <!-- Привязка материалов -->
+            <div class="form-section">
+                <h4>📎 Необходимые материалы</h4>
+                <div id="addMaterialsList">
+                    <div class="material-row">
+                        <select name="materialIds" class="form-control" style="flex: 2;">
+                            <option value="0">Выберите материал...</option>
+                        </select>
+                        <input type="number" name="quantities" class="form-control" placeholder="Кол-во на ед." step="0.01" min="0.01" style="flex: 1;" />
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeMaterialRow(this)">✕</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="addMaterialRow('addMaterialsList')">+ Добавить материал</button>
             </div>
-            <button type="submit" class="btn btn-primary">Создать</button>
+            
+            <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Создать продукт</button>
         </form>
     </div>
 </div>
 
 <!-- Модальное окно редактирования -->
 <div id="editModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 700px;">
         <div class="modal-header">
             <h2>Редактировать продукт</h2>
             <span class="close" onclick="closeModal('editModal')">&times;</span>
@@ -122,7 +130,7 @@
             </div>
             <div class="form-group">
                 <label>Описание</label>
-                <textarea name="Description" id="editDescription" class="form-control" rows="3"></textarea>
+                <textarea name="Description" id="editDescription" class="form-control" rows="2"></textarea>
             </div>
             <div class="form-group">
                 <label>Категория</label>
@@ -132,27 +140,126 @@
                 <label>Время производства (мин/шт)</label>
                 <input type="number" name="ProductionTimePerUnit" id="editProdTime" class="form-control" min="1" required />
             </div>
-            <div class="form-group">
-                <label>Минимальный запас</label>
-                <input type="number" name="MinimalStock" id="editMinStock" class="form-control" min="0" required />
+            
+            <!-- Редактирование материалов -->
+            <div class="form-section">
+                <h4>📎 Необходимые материалы</h4>
+                <div id="editMaterialsList">
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="addMaterialRow('editMaterialsList')">+ Добавить материал</button>
             </div>
-            <button type="submit" class="btn btn-warning">Сохранить</button>
+            
+            <button type="submit" class="btn btn-warning" style="margin-top: 15px;">Сохранить</button>
         </form>
     </div>
 </div>
 
 <script>
-    function showAddModal() {
-        document.getElementById('addModal').style.display = 'block';
+    let allMaterials = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/materials/list')
+            .then(response => response.json())
+            .then(materials => {
+                allMaterials = materials;
+                updateAllMaterialSelects();
+            });
+    });
+
+    function updateAllMaterialSelects() {
+        document.querySelectorAll('select[name="materialIds"]').forEach(select => {
+            const currentValue = select.value;
+            select.innerHTML = '<option value="0">Выберите материал...</option>';
+            allMaterials.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = `${m.name} (${m.unitOfMeasure})`;
+                select.appendChild(option);
+            });
+            select.value = currentValue;
+        });
     }
 
-    function showEditModal(id, name, description, category, prodTime, minStock) {
+    function addMaterialRow(containerId) {
+        const container = document.getElementById(containerId);
+        const row = document.createElement('div');
+        row.className = 'material-row';
+        row.innerHTML = `
+            <select name="materialIds" class="form-control" style="flex: 2;">
+                <option value="0">Выберите материал...</option>
+                ${allMaterials.map(m => `<option value="${m.id}">${m.name} (${m.unitOfMeasure})</option>`).join('')}
+            </select>
+            <input type="number" name="quantities" class="form-control" placeholder="Кол-во на ед." step="0.01" min="0.01" style="flex: 1;" />
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeMaterialRow(this)">✕</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function removeMaterialRow(button) {
+        const row = button.parentElement;
+        const container = row.parentElement;
+        if (container.children.length > 1) {
+            row.remove();
+        }
+    }
+
+    function showAddModal() {
+        document.getElementById('addModal').style.display = 'block';
+        const container = document.getElementById('addMaterialsList');
+        container.innerHTML = `
+            <div class="material-row">
+                <select name="materialIds" class="form-control" style="flex: 2;">
+                    <option value="0">Выберите материал...</option>
+                    ${allMaterials.map(m => `<option value="${m.id}">${m.name} (${m.unitOfMeasure})</option>`).join('')}
+                </select>
+                <input type="number" name="quantities" class="form-control" placeholder="Кол-во на ед." step="0.01" min="0.01" style="flex: 1;" />
+                <button type="button" class="btn btn-sm btn-danger" onclick="removeMaterialRow(this)">✕</button>
+            </div>
+        `;
+    }
+
+    function showEditModal(id, name, description, category, prodTime) {
         document.getElementById('editProductId').value = id;
         document.getElementById('editName').value = name;
         document.getElementById('editDescription').value = description || '';
         document.getElementById('editCategory').value = category || '';
         document.getElementById('editProdTime').value = prodTime;
-        document.getElementById('editMinStock').value = minStock;
+        
+        fetch(`/api/products/${id}/materials`)
+            .then(response => response.json())
+            .then(productMaterials => {
+                const container = document.getElementById('editMaterialsList');
+                container.innerHTML = '';
+                
+                if (productMaterials.length > 0) {
+                    productMaterials.forEach(pm => {
+                        const row = document.createElement('div');
+                        row.className = 'material-row';
+                        row.innerHTML = `
+                            <select name="materialIds" class="form-control" style="flex: 2;">
+                                <option value="0">Выберите материал...</option>
+                                ${allMaterials.map(m => `<option value="${m.id}" ${m.id == pm.materialId ? 'selected' : ''}>${m.name} (${m.unitOfMeasure})</option>`).join('')}
+                            </select>
+                            <input type="number" name="quantities" class="form-control" placeholder="Кол-во на ед." step="0.01" min="0.01" value="${pm.quantityNeeded}" style="flex: 1;" />
+                            <button type="button" class="btn btn-sm btn-danger" onclick="removeMaterialRow(this)">✕</button>
+                        `;
+                        container.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement('div');
+                    row.className = 'material-row';
+                    row.innerHTML = `
+                        <select name="materialIds" class="form-control" style="flex: 2;">
+                            <option value="0">Выберите материал...</option>
+                            ${allMaterials.map(m => `<option value="${m.id}">${m.name} (${m.unitOfMeasure})</option>`).join('')}
+                        </select>
+                        <input type="number" name="quantities" class="form-control" placeholder="Кол-во на ед." step="0.01" min="0.01" style="flex: 1;" />
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeMaterialRow(this)">✕</button>
+                    `;
+                    container.appendChild(row);
+                }
+            });
+        
         document.getElementById('editModal').style.display = 'block';
     }
 
@@ -166,3 +273,29 @@
         }
     }
 </script>
+
+<style>
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+    .form-row .form-group {
+        flex: 1;
+    }
+    .form-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+    .form-section h4 {
+        margin-bottom: 10px;
+        color: #1a237e;
+    }
+    .material-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+</style>

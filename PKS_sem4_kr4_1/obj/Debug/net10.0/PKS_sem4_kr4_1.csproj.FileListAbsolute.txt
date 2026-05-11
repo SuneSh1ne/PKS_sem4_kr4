@@ -195,3 +195,4 @@ H:\Projects_VS\PKS_sem4_kr4\PKS_sem4_kr4_1\obj\Debug\net10.0\refint\PKS_sem4_kr4
 H:\Projects_VS\PKS_sem4_kr4\PKS_sem4_kr4_1\obj\Debug\net10.0\PKS_sem4_kr4_1.pdb
 H:\Projects_VS\PKS_sem4_kr4\PKS_sem4_kr4_1\obj\Debug\net10.0\PKS_sem4_kr4_1.genruntimeconfig.cache
 H:\Projects_VS\PKS_sem4_kr4\PKS_sem4_kr4_1\obj\Debug\net10.0\ref\PKS_sem4_kr4_1.dll
+H:\Projects_VS\PKS_sem4_kr4\PKS_sem4_kr4_1\obj\Debug\net10.0\PKS_sem4_kr4_1.sourcelink.json

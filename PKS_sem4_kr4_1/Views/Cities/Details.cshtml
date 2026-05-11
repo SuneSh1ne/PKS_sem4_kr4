@@ -1,17 +1,23 @@
 @model TouristGuide.Models.City
+@{
+    ViewData["Title"] = Model.Name;
+}
 
 <h1>@Model.Name</h1>
 <hr />
 
 <div class="row">
     <div class="col-md-4">
-        <img src="@Model.PhotoPath" class="img-fluid" alt="@Model.Name" 
-             onerror="this.src='/images/placeholder.jpg'" />
+        @if (!string.IsNullOrEmpty(Model.PhotoPath))
+        {
+            <img src="@Model.PhotoPath" class="img-fluid city-main-photo" alt="@Model.Name" 
+                 onerror="this.src='/images/placeholder.jpg'" />
+        }
         @if (!string.IsNullOrEmpty(Model.CoatOfArmsPath))
         {
             <h5 class="mt-3">Герб города</h5>
-            <img src="@Model.CoatOfArmsPath" class="img-fluid" alt="Герб @Model.Name" 
-                 onerror="this.src='/images/placeholder.jpg'" style="max-height: 200px;" />
+            <img src="@Model.CoatOfArmsPath" class="img-fluid coat-of-arms" alt="Герб @Model.Name" 
+                 onerror="this.src='/images/placeholder.jpg'" />
         }
     </div>
     <div class="col-md-8">
@@ -29,29 +35,191 @@
 </div>
 
 <h2 class="mt-4">Достопримечательности</h2>
-<div class="row">
-    @if (Model.Attractions.Any())
-    {
+
+@if (Model.Attractions.Any())
+{
+    <div class="attractions-grid">
         @foreach (var attraction in Model.Attractions)
         {
-            <div class="col-md-4 mb-3">
-                <div class="card">
-                    <img src="@attraction.PhotoPath" class="card-img-top" alt="@attraction.Name" 
-                         onerror="this.src='/images/placeholder.jpg'" />
-                    <div class="card-body">
-                        <h5 class="card-title">@attraction.Name</h5>
-                        <p class="card-text">@attraction.History?.Substring(0, Math.Min(attraction.History.Length, 150))...</p>
-                        <a asp-controller="Attractions" asp-action="Details" asp-route-id="@attraction.Id" 
-                           class="btn btn-outline-primary">Подробнее</a>
-                    </div>
+            <div class="attraction-card">
+                <div class="attraction-card-image">
+                    @if (!string.IsNullOrEmpty(attraction.PhotoPath))
+                    {
+                        <img src="@attraction.PhotoPath" alt="@attraction.Name" 
+                             onerror="this.src='/images/placeholder.jpg'" />
+                    }
+                    else
+                    {
+                        <div class="placeholder-image">
+                            <span>🏛️</span>
+                        </div>
+                    }
+                </div>
+                <div class="attraction-card-body">
+                    <h5 class="attraction-card-title">@attraction.Name</h5>
+                    <p class="attraction-card-text">
+                        @(attraction.History?.Length > 150 
+                            ? attraction.History.Substring(0, 150) + "..." 
+                            : attraction.History)
+                    </p>
+                    <a asp-controller="Attractions" asp-action="Details" asp-route-id="@attraction.Id" 
+                       class="btn btn-outline-primary">Подробнее</a>
                 </div>
             </div>
         }
-    }
-    else
-    {
-        <p>Достопримечательности не добавлены.</p>
-    }
-</div>
+    </div>
+}
+else
+{
+    <p>Достопримечательности не добавлены.</p>
+}
 
-<a asp-controller="Home" asp-action="Index" class="btn btn-secondary mt-3">Назад к списку городов</a>
+<a asp-controller="Home" asp-action="Index" class="btn btn-secondary mt-4">← Назад к списку городов</a>
+
+<style>
+    .city-main-photo {
+        border-radius: 12px;
+        width: 100%;
+        max-height: 300px;
+        object-fit: cover;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .coat-of-arms {
+        border-radius: 12px;
+        max-height: 200px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .attractions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 25px;
+        margin-top: 20px;
+    }
+
+    .attraction-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        transition: transform 0.3s, box-shadow 0.3s;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .attraction-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .attraction-card-image {
+        width: 100%;
+        height: 180px;
+        overflow: hidden;
+    }
+
+    .attraction-card-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .placeholder-image {
+        width: 100%;
+        height: 100%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3.5rem;
+    }
+
+    .attraction-card-body {
+        padding: 20px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .attraction-card-title {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #1a237e;
+        margin-bottom: 10px;
+    }
+
+    .attraction-card-text {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+        flex-grow: 1;
+    }
+
+    .attraction-card-body .btn {
+        align-self: flex-start;
+        margin-top: auto;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.3s;
+    }
+
+    .btn-outline-primary {
+        background: transparent;
+        border: 2px solid #1a237e;
+        color: #1a237e;
+    }
+
+    .btn-outline-primary:hover {
+        background: #1a237e;
+        color: white;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+        color: #1a237e;
+    }
+
+    h2 {
+        color: #1a237e;
+    }
+
+    dl dt {
+        font-weight: bold;
+        color: #495057;
+    }
+
+    dl dd {
+        margin-bottom: 10px;
+    }
+
+    /* Адаптивность */
+    @@media only screen and (max-width: 768px) {
+        .attractions-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .row {
+            flex-direction: column;
+        }
+    }
+</style>

@@ -99,7 +99,13 @@
                         <td>@(order.ProductionLine?.Name ?? "Не назначена")</td>
                         <td>
                             <span class="status-badge status-@order.Status.ToLower()">
-                                @order.Status
+                                @switch (order.Status)
+                                {
+                                    case "Pending": <text>⏳ Ожидает</text> break;
+                                    case "InProgress": <text>⚙️ В процессе</text> break;
+                                    case "Completed": <text>✅ Завершён</text> break;
+                                    case "Cancelled": <text>❌ Отменён</text> break;
+                                }
                             </span>
                         </td>
                         <td>

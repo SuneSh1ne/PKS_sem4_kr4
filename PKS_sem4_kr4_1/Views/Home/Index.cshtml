@@ -1,4 +1,7 @@
 @model IEnumerable<TouristGuide.Models.City>
+@{
+    ViewData["Title"] = "Главная";
+}
 
 <h1>Туристический путеводитель</h1>
 
@@ -11,23 +14,166 @@
     </div>
 </form>
 
-<div class="row">
+<div class="cities-grid">
     @foreach (var city in Model)
     {
-        <div class="col-md-4 mb-4">
-            <div class="card">
-                <img src="@city.PhotoPath" class="card-img-top" alt="@city.Name" 
-                     onerror="this.src='/images/placeholder.jpg'" />
-                <div class="card-body">
-                    <h5 class="card-title">@city.Name</h5>
-                    <p class="card-text">
-                        <strong>Регион:</strong> @city.Region<br />
-                        <strong>Население:</strong> @city.Population.ToString("N0") чел.
-                    </p>
-                    <a asp-controller="Cities" asp-action="Details" asp-route-id="@city.Id" 
-                       class="btn btn-primary">Подробнее</a>
-                </div>
+        <div class="city-card">
+            <div class="city-card-image">
+                @if (!string.IsNullOrEmpty(city.PhotoPath))
+                {
+                    <img src="@city.PhotoPath" alt="@city.Name" onerror="this.src='/images/placeholder.jpg'" />
+                }
+                else
+                {
+                    <div class="placeholder-image">
+                        <span>🏙️</span>
+                    </div>
+                }
+            </div>
+            <div class="city-card-body">
+                <h5 class="city-card-title">@city.Name</h5>
+                <p class="city-card-text">
+                    <strong>Регион:</strong> @city.Region<br />
+                    <strong>Население:</strong> @city.Population.ToString("N0") чел.
+                </p>
+                <a asp-controller="Cities" asp-action="Details" asp-route-id="@city.Id" 
+                   class="btn btn-primary">Подробнее</a>
             </div>
         </div>
     }
 </div>
+
+<style>
+    .cities-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 25px;
+        margin-top: 30px;
+    }
+
+    .city-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        transition: transform 0.3s, box-shadow 0.3s;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .city-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .city-card-image {
+        width: 100%;
+        height: 200px;
+        overflow: hidden;
+    }
+
+    .city-card-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .placeholder-image {
+        width: 100%;
+        height: 100%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 4rem;
+    }
+
+    .city-card-body {
+        padding: 20px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .city-card-title {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #1a237e;
+        margin-bottom: 10px;
+    }
+
+    .city-card-text {
+        color: #666;
+        margin-bottom: 15px;
+        flex-grow: 1;
+    }
+
+    .city-card-body .btn {
+        align-self: flex-start;
+        margin-top: auto;
+    }
+
+    .search-form {
+        background-color: #e9ecef;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+
+    .input-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    .form-control {
+        flex-grow: 1;
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.3s;
+    }
+
+    .btn-primary {
+        background-color: #1a237e;
+        color: white;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+        color: #1a237e;
+        margin-bottom: 20px;
+    }
+
+    /* Адаптивность */
+    @@media only screen and (max-width: 768px) {
+        .cities-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .input-group {
+            flex-direction: column;
+        }
+    }
+</style>

@@ -15,15 +15,18 @@ namespace TouristGuide.Controllers
 
         public async Task<IActionResult> Index(string searchString)
         {
-            var cities = from c in _context.Cities select c;
+            // Получаем все города
+            var cities = await _context.Cities.ToListAsync();
 
+            // Поиск без учёта регистра
             if (!string.IsNullOrEmpty(searchString))
             {
-                cities = cities.Where(c => c.Name.Contains(searchString));
+                cities = cities.Where(c => c.Name != null && 
+                    c.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase)).ToList();
                 ViewData["CurrentSearch"] = searchString;
             }
 
-            return View(await cities.ToListAsync());
+            return View(cities);
         }
     }
 }

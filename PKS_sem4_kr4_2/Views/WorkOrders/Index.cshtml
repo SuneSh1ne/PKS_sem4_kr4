@@ -8,7 +8,6 @@
     <button class="btn btn-primary" onclick="showCreateModal()">+ Новый заказ</button>
 </div>
 
-<!-- Сообщения -->
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success">@TempData["Success"]</div>
@@ -62,25 +61,41 @@
         <tbody>
             @foreach (var order in Model)
             {
-                var isOverdue = order.Status != "Completed" && order.Status != "Cancelled" && order.EstimatedEndDate < DateTime.Now;
-                <tr class="@(isOverdue ? "low-stock-row" : "")">
+                var isOverdue = order.Status != "Completed" && order.Status != "Cancelled" 
+                             && order.Status != "Pending"
+                             && order.EstimatedEndDate < DateTime.Now;
+                <tr class="@(isOverdue ? "low-stock-row" : "")" data-order-id="@order.Id">
                     <td><strong>#@order.Id</strong></td>
                     <td>
-                        <a href="/WorkOrders/Details/@order.Id" class="product-link">
-                            @order.Product?.Name
-                        </a>
+                        <a href="/WorkOrders/Details/@order.Id" class="product-link">@order.Product?.Name</a>
                     </td>
                     <td>@order.Quantity шт.</td>
                     <td>@(order.ProductionLine?.Name ?? "Не назначена")</td>
-                    <td>@order.StartDate.ToString("dd.MM.yyyy HH:mm")</td>
                     <td>
-                        @order.EstimatedEndDate.ToString("dd.MM.yyyy HH:mm")
+                        @if (order.Status == "Pending")
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        else
+                        {
+                            @order.StartDate.ToString("dd.MM.yyyy HH:mm")
+                        }
+                    </td>
+                    <td>
+                        @if (order.Status == "Pending")
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        else
+                        {
+                            @order.EstimatedEndDate.ToString("dd.MM.yyyy HH:mm")
+                        }
                         @if (isOverdue)
                         {
                             <br /><span class="text-danger fw-bold">⚠️ Просрочен!</span>
                         }
                     </td>
-                    <td>
+                    <td class="status-cell" data-order-id="@order.Id">
                         <span class="status-badge status-@order.Status.ToLower()">
                             @switch (order.Status)
                             {
@@ -92,35 +107,44 @@
                         </span>
                     </td>
                     <td>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: @order.ProgressPercent%"></div>
-                            <span>@order.ProgressPercent%</span>
-                        </div>
+                        @if (order.Status == "InProgress")
+                        {
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: @order.ProgressPercent%" data-order-id="@order.Id"></div>
+                                <span class="progress-text" data-order-id="@order.Id">@order.ProgressPercent%</span>
+                            </div>
+                        }
+                        else if (order.Status == "Completed")
+                        {
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 100%"></div>
+                                <span>100%</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
                     </td>
-                    <td>
-                        <div class="action-buttons">
-                            <a href="/WorkOrders/Details/@order.Id" class="btn btn-sm btn-info">📋</a>
-
-                            @if (order.Status == "Pending")
-                            {
-                                <button class="btn btn-sm btn-success" 
-                                        onclick="showStartModal(@order.Id, @order.ProductId, '@order.Product?.Name', @order.Quantity)">
-                                    ▶️ Запустить
-                                </button>
-                                <button class="btn btn-sm btn-danger" 
-                                        onclick="cancelOrder(@order.Id)">
-                                    ❌ Отменить
-                                </button>
-                            }
-                            
-                            @if (order.Status == "InProgress")
-                            {
-                                <button class="btn btn-sm btn-primary" 
-                                        onclick="showProgressModal(@order.Id, @order.ProgressPercent)">
-                                    📊 Прогресс
-                                </button>
-                            }
-                        </div>
+                    <td class="action-buttons">
+                        <a href="/WorkOrders/Details/@order.Id" class="btn btn-sm btn-info">📋</a>
+                        
+                        @if (order.Status == "Pending")
+                        {
+                            <button class="btn btn-sm btn-success" onclick="startOrder(@order.Id)">
+                                ▶️ Запустить
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="cancelOrder(@order.Id)">
+                                ❌ Отменить
+                            </button>
+                        }
+                        
+                        @if (order.Status == "InProgress")
+                        {
+                            <button class="btn btn-sm btn-danger" onclick="cancelOrder(@order.Id)">
+                                ⏹️ Остановить
+                            </button>
+                        }
                     </td>
                 </tr>
             }
@@ -135,34 +159,23 @@
             <h2>Создать новый заказ</h2>
             <span class="close" onclick="closeModal('createModal')">&times;</span>
         </div>
-        <form method="post" action="/WorkOrders/Create" id="createOrderForm">
+        <form method="post" action="/WorkOrders/Create">
             <div class="form-group">
                 <label>Продукт</label>
-                <select name="productId" id="createProductId" class="form-control" required onchange="updateProductionInfo()">
+                <select name="productId" id="createProductId" class="form-control" required>
                     <option value="">Выберите продукт...</option>
                 </select>
             </div>
             <div class="form-group">
                 <label>Количество</label>
-                <input type="number" name="quantity" id="createQuantity" class="form-control" min="1" required onchange="updateProductionInfo()" />
+                <input type="number" name="quantity" id="createQuantity" class="form-control" min="1" required />
             </div>
             <div class="form-group">
-                <label>Производственная линия</label>
-                <select name="productionLineId" id="createLineId" class="form-control" onchange="updateProductionInfo()">
-                    <option value="">Автоматический выбор</option>
+                <label>Производственная линия (опционально)</label>
+                <select name="productionLineId" id="createLineId" class="form-control">
+                    <option value="">Выберите линию...</option>
                 </select>
-            </div>
-            
-            <!-- Информация о расчётах -->
-            <div id="calculationInfo" class="calculation-info" style="display:none;">
-                <div class="info-row">
-                    <span>⏱️ Расчётное время:</span>
-                    <strong id="calcTime">-</strong>
-                </div>
-                <div class="info-row">
-                    <span>📅 Дата завершения:</span>
-                    <strong id="calcEndDate">-</strong>
-                </div>
+                <small class="text-muted">Линию можно назначить позже при запуске</small>
             </div>
             
             <button type="submit" class="btn btn-primary">Создать заказ</button>
@@ -170,57 +183,17 @@
     </div>
 </div>
 
-<!-- Модальное окно запуска производства -->
-<div id="startModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Запустить производство</h2>
-            <span class="close" onclick="closeModal('startModal')">&times;</span>
-        </div>
-        <form method="post" action="/WorkOrders/StartProduction">
-            <input type="hidden" name="orderId" id="startOrderId" />
-            <div class="form-group">
-                <label>Заказ: <strong id="startOrderInfo"></strong></label>
-            </div>
-            <div class="form-group">
-                <label>Производственная линия</label>
-                <select name="lineId" id="startLineSelect" class="form-control" required>
-                    <option value="">Выберите линию...</option>
-                </select>
-            </div>
-            <div class="alert alert-warning">
-                ⚠️ При запуске материалы будут списаны со склада!
-            </div>
-            <button type="submit" class="btn btn-success">Запустить производство</button>
-        </form>
-    </div>
-</div>
-
-<!-- Модальное окно обновления прогресса -->
-<div id="progressModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Обновить прогресс</h2>
-            <span class="close" onclick="closeModal('progressModal')">&times;</span>
-        </div>
-        <form method="post" action="/WorkOrders/UpdateProgress">
-            <input type="hidden" name="orderId" id="progressOrderId" />
-            <div class="form-group">
-                <label>Прогресс выполнения (%)</label>
-                <input type="range" name="percent" id="progressPercent" class="form-control" 
-                       min="0" max="100" step="5" oninput="document.getElementById('progressValue').textContent = this.value + '%'" />
-                <div style="text-align:center; font-size: 2rem; font-weight: bold; margin-top: 10px;" id="progressValue">50%</div>
-            </div>
-            <button type="submit" class="btn btn-primary">Обновить</button>
-        </form>
-    </div>
-</div>
-
 <script>
-    // Загрузка данных для выпадающих списков при открытии страницы
+    let autoRefreshInterval;
+
     document.addEventListener('DOMContentLoaded', function() {
         loadProducts();
-        loadLines();
+        loadAvailableLines();
+        autoRefreshInterval = setInterval(updateProgressBars, 5000);
+    });
+
+    window.addEventListener('beforeunload', function() {
+        if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     });
 
     function loadProducts() {
@@ -228,90 +201,82 @@
             .then(response => response.json())
             .then(products => {
                 const select = document.getElementById('createProductId');
+                select.innerHTML = '<option value="">Выберите продукт...</option>';
                 products.forEach(p => {
                     const option = document.createElement('option');
                     option.value = p.id;
                     option.textContent = `${p.name} (${p.productionTimePerUnit} мин/шт)`;
-                    option.dataset.prodTime = p.productionTimePerUnit;
                     select.appendChild(option);
                 });
             });
     }
 
-    function loadLines() {
+    function loadAvailableLines() {
         fetch('/api/lines/available')
             .then(response => response.json())
             .then(lines => {
-                const createSelect = document.getElementById('createLineId');
-                const startSelect = document.getElementById('startLineSelect');
-                
+                const select = document.getElementById('createLineId');
+                select.innerHTML = '<option value="">Выберите линию...</option>';
                 lines.forEach(l => {
-                    // Для создания заказа
-                    const option1 = document.createElement('option');
-                    option1.value = l.id;
-                    option1.textContent = `${l.name} (Эффективность: ${l.efficiencyFactor}x)`;
-                    option1.dataset.efficiency = l.efficiencyFactor;
-                    createSelect.appendChild(option1);
-                    
-                    // Для запуска производства
-                    const option2 = document.createElement('option');
-                    option2.value = l.id;
-                    option2.textContent = `${l.name} (Эффективность: ${l.efficiencyFactor}x)`;
-                    startSelect.appendChild(option2);
+                    const option = document.createElement('option');
+                    option.value = l.id;
+                    option.textContent = `${l.name} (Эффективность: ${l.efficiencyFactor}x)`;
+                    select.appendChild(option);
                 });
             });
     }
 
-    function updateProductionInfo() {
-        const productSelect = document.getElementById('createProductId');
-        const quantityInput = document.getElementById('createQuantity');
-        const lineSelect = document.getElementById('createLineId');
-        const calcInfo = document.getElementById('calculationInfo');
-        
-        if (!productSelect.value || !quantityInput.value) {
-            calcInfo.style.display = 'none';
-            return;
-        }
-        
-        const selectedOption = productSelect.options[productSelect.selectedIndex];
-        const prodTime = parseInt(selectedOption.dataset.prodTime) || 10;
-        const quantity = parseInt(quantityInput.value) || 0;
-        
-        let efficiency = 1.0;
-        if (lineSelect.value) {
-            const lineOption = lineSelect.options[lineSelect.selectedIndex];
-            efficiency = parseFloat(lineOption.dataset.efficiency) || 1.0;
-        }
-        
-        const totalMinutes = Math.ceil((quantity * prodTime) / efficiency);
-        const endDate = new Date();
-        endDate.setMinutes(endDate.getMinutes() + totalMinutes);
-        
-        document.getElementById('calcTime').textContent = `${totalMinutes} минут`;
-        document.getElementById('calcEndDate').textContent = endDate.toLocaleString('ru-RU');
-        calcInfo.style.display = 'block';
+    function updateProgressBars() {
+        fetch('/api/workorders/active-progresses')
+            .then(response => response.json())
+            .then(orders => {
+                orders.forEach(order => {
+                    const progressBar = document.querySelector(`.progress-fill[data-order-id="${order.id}"]`);
+                    const progressText = document.querySelector(`.progress-text[data-order-id="${order.id}"]`);
+                    const statusCell = document.querySelector(`.status-cell[data-order-id="${order.id}"]`);
+                    
+                    if (progressBar) {
+                        progressBar.style.width = order.progressPercent + '%';
+                    }
+                    if (progressText) {
+                        progressText.textContent = order.progressPercent + '%';
+                    }
+                    if (statusCell && order.status === 'Completed') {
+                        statusCell.innerHTML = '<span class="status-badge status-completed">✅ Завершён</span>';
+                        const actionCell = statusCell.closest('tr').querySelector('.action-buttons');
+                        if (actionCell) {
+                            actionCell.innerHTML = '<a href="/WorkOrders/Details/' + order.id + '" class="btn btn-sm btn-info">📋</a>';
+                        }
+                    }
+                });
+            })
+            .catch(error => console.log('Ошибка обновления:', error));
     }
 
     function showCreateModal() {
         document.getElementById('createModal').style.display = 'block';
     }
 
-    function showStartModal(orderId, productId, productName, quantity) {
-        document.getElementById('startOrderId').value = orderId;
-        document.getElementById('startOrderInfo').textContent = 
-            `#${orderId} - ${productName} (${quantity} шт.)`;
-        document.getElementById('startModal').style.display = 'block';
-    }
-
-    function showProgressModal(orderId, currentProgress) {
-        document.getElementById('progressOrderId').value = orderId;
-        document.getElementById('progressPercent').value = currentProgress;
-        document.getElementById('progressValue').textContent = currentProgress + '%';
-        document.getElementById('progressModal').style.display = 'block';
+    function startOrder(orderId) {
+        if (confirm('Запустить заказ #' + orderId + ' в производство? Материалы будут списаны со склада.')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/WorkOrders/StartOrder';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'orderId';
+            input.value = orderId;
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 
     function cancelOrder(orderId) {
-        if (confirm('Вы уверены, что хотите отменить заказ #' + orderId + '?')) {
+        var message = 'Отменить заказ #' + orderId + '?';
+        if (confirm(message)) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/WorkOrders/CancelOrder';
@@ -345,13 +310,11 @@
         border-radius: 8px;
         margin-bottom: 20px;
     }
-    
     .info-row {
         display: flex;
         justify-content: space-between;
         padding: 5px 0;
     }
-    
     .info-row strong {
         color: #1a237e;
     }
